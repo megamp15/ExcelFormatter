@@ -1,0 +1,99 @@
+{
+    "output_columns": [
+        {
+            "name": "Employee Name",
+            "source_column": "Name",
+            "alignment": "left",
+            "width": 20,
+            "formatting": {}
+        },
+        {
+            "name": "Check #",
+            "source_column": "",
+            "alignment": "center",
+            "width": 10,
+            "formatting": {}
+        },
+        {
+            "name": "Chk Amt",
+            "source_column": "Net pay",
+            "alignment": "right",
+            "width": 12,
+            "formatting": {
+                "number_format": "#,##0.00"
+            }
+        },
+        {
+            "name": "Gross",
+            "source_column": "Adjusted gross",
+            "alignment": "right",
+            "width": 12,
+            "formatting": {
+                "number_format": "#,##0.00"
+            }
+        },
+        {
+            "name": "Fica E/R",
+            "source_column": "=Employee taxes - SS + Employee taxes - Med",
+            "alignment": "right",
+            "width": 12,
+            "formatting": {
+                "number_format": "#,##0.00"
+            }
+        },
+        {
+            "name": "Liab",
+            "source_column": "=Chk Amt - Gross - Fica",
+            "alignment": "right",
+            "width": 12,
+            "formatting": {
+                "number_format": "#,##0.00_);(#,##0.00)"
+            }
+        },
+        {
+            "name": "Date",
+            "source_column": "Pay date",
+            "alignment": "center",
+            "width": 12,
+            "formatting": {
+                "date_format": "MM/DD/YYYY"
+            }
+        },
+        {
+            "name": "Period",
+            "source_column": "Time period",
+            "alignment": "center",
+            "width": 25,
+            "formatting": {
+                "date_range_format": "MM/DD/YYYY - MM/DD/YYYY"
+            }
+        }
+    ],
+    "header_formatting": {
+        "bold": true,
+        "background_color": "366092",
+        "font_color": "FFFFFF",
+        "alignment": "center"
+    },
+    "column_name_alignment": {
+        "Employee Name": "left",
+        "Check #": "center",
+        "Chk Amt": "right",
+        "Gross": "right",
+        "Fica E/R": "right",
+        "Liab": "right",
+        "Date": "center",
+        "Period": "center"
+    },
+    "general_settings": {
+        "auto_fit_columns": true
+    },
+    "void": {
+        "enabled": true,
+        "zero_columns": [
+            "Chk Amt",
+            "Gross",
+            "Fica E/R"
+        ]
+    }
+}
