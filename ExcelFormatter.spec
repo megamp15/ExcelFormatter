@@ -1,0 +1,61 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('config', 'config'),
+        ('gui', 'gui'),
+        ('core', 'core'),
+    ],
+    hiddenimports=[
+        'config.settings',
+        'gui.views.main_window',
+        'gui.controllers.main_controller',
+        'gui.components.file_selector',
+        'gui.components.column_mapper',
+        'gui.components.output_settings',
+        'gui.components.progress_dialog',
+        'core.config_manager',
+        'core.excel_processor',
+        'pandas',
+        'openpyxl',
+        'xlrd',
+        'tkinter.filedialog',
+        'tkinter.messagebox',
+        'tkinter.ttk',
+        'tkinter.simpledialog',
+        'tkinter.colorchooser',
+        'tkinter.commondialog',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='ExcelFormatter',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
