@@ -105,7 +105,7 @@ class ExcelFormatterApp:
         
         # Set window icon if available
         try:
-            icon_path = project_root / "assets" / "icon.ico"
+            icon_path = project_root / "icon.ico"
             if icon_path.exists():
                 self.root.iconbitmap(str(icon_path))
         except Exception:
