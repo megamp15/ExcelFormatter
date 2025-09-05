@@ -983,9 +983,21 @@ class AdvancedSettingsDialog:
         font_color_entry = ttk.Entry(main_frame, textvariable=self.font_color_var, width=10)
         font_color_entry.grid(row=3, column=1, sticky="w", padx=(10, 0), pady=5)
         
+        # Data transformations
+        ttk.Label(main_frame, text="Data Transformations:", font=("TkDefaultFont", 9, "bold")).grid(row=4, column=0, columnspan=2, sticky="w", pady=(15, 5))
+        
+        # Remove asterisks checkbox
+        self.remove_asterisks_var = tk.BooleanVar(value=self.settings.get("remove_asterisks", False))
+        remove_asterisks_check = ttk.Checkbutton(
+            main_frame, 
+            text="Remove asterisks (*) from text values", 
+            variable=self.remove_asterisks_var
+        )
+        remove_asterisks_check.grid(row=5, column=0, columnspan=2, sticky="w", pady=5)
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=2, pady=(20, 0))
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
         
         ttk.Button(button_frame, text="OK", command=self.save_settings).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Cancel", command=self.dialog.destroy).pack(side=tk.LEFT)
@@ -997,9 +1009,10 @@ class AdvancedSettingsDialog:
         self.settings["bold"] = self.bold_var.get()
         self.settings["background_color"] = self.bg_color_var.get()
         self.settings["font_color"] = self.font_color_var.get()
+        self.settings["remove_asterisks"] = self.remove_asterisks_var.get()
         
-        # Remove empty values
-        self.settings = {k: v for k, v in self.settings.items() if v}
+        # Remove empty values (except boolean values)
+        self.settings = {k: v for k, v in self.settings.items() if v or isinstance(v, bool)}
         
         # Update row data
         self.row_data['advanced_settings'] = self.settings
@@ -1238,12 +1251,15 @@ class ExpressionBuilderDialog:
         builder_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.formula_type = tk.StringVar(value="visual")
-        ttk.Radiobutton(builder_frame, text="Visual Builder (Recommended)", 
+        visual_radio = ttk.Radiobutton(builder_frame, text="Visual Builder (Recommended)", 
                        variable=self.formula_type, value="visual",
-                       command=self.update_formula_interface).pack(anchor=tk.W)
-        ttk.Radiobutton(builder_frame, text="Manual Entry (Advanced)", 
+                       command=self.update_formula_interface)
+        visual_radio.pack(anchor=tk.W)
+        
+        manual_radio = ttk.Radiobutton(builder_frame, text="Manual Entry (Advanced)", 
                        variable=self.formula_type, value="manual",
-                       command=self.update_formula_interface).pack(anchor=tk.W)
+                       command=self.update_formula_interface)
+        manual_radio.pack(anchor=tk.W)
         
         # Content frame that changes based on formula type
         self.formula_content_frame = ttk.Frame(formula_frame)
@@ -1287,57 +1303,68 @@ class ExpressionBuilderDialog:
             # Widget already destroyed, ignore
             pass
             
-        if self.formula_type.get() == "visual":
+        formula_type = self.formula_type.get()
+        print(f"DEBUG: Updating formula interface to: {formula_type}")  # Debug line
+        
+        if formula_type == "visual":
             self.create_visual_formula_builder()
         else:
             self.create_manual_formula_entry()
             
     def create_visual_formula_builder(self):
         """Create visual formula builder with dropdowns."""
-        # Visual builder
-        visual_frame = ttk.Frame(self.formula_content_frame)
-        visual_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(visual_frame, text="Build your formula step by step:").pack(anchor=tk.W, pady=(0, 5))
-        
-        # Formula parts container with scrolling
-        self.formula_parts = []
-        
-        # Create scrollable frame for formula parts
-        parts_canvas_frame = ttk.Frame(visual_frame)
-        parts_canvas_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        parts_canvas_frame.grid_rowconfigure(0, weight=1)
-        parts_canvas_frame.grid_columnconfigure(0, weight=1)
-        
-        parts_canvas = tk.Canvas(parts_canvas_frame, height=200, highlightthickness=0)
-        parts_scrollbar = ttk.Scrollbar(parts_canvas_frame, orient="vertical", command=parts_canvas.yview)
-        self.formula_parts_frame = ttk.Frame(parts_canvas)
-        
-        self.formula_parts_frame.bind(
-            "<Configure>",
-            lambda e: parts_canvas.configure(scrollregion=parts_canvas.bbox("all"))
-        )
-        
-        parts_canvas.create_window((0, 0), window=self.formula_parts_frame, anchor="nw")
-        parts_canvas.configure(yscrollcommand=parts_scrollbar.set)
-        
-        parts_canvas.grid(row=0, column=0, sticky="nsew")
-        parts_scrollbar.grid(row=0, column=1, sticky="ns")
-        
-        # Bind mousewheel for formula parts
-        parts_canvas.bind("<MouseWheel>", lambda e: parts_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
-        self.formula_parts_frame.bind("<MouseWheel>", lambda e: parts_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
-        
-        # Add first part
-        self.add_formula_part()
-        
-        # Add part button
-        ttk.Button(visual_frame, text="Add More", 
-                  command=self.add_formula_part).pack(anchor=tk.W, pady=(5, 0))
-        
-        # Parse existing formula if it exists
-        if self.current_formula:
-            self.parse_existing_formula()
+        print("DEBUG: Creating visual formula builder")  # Debug line
+        try:
+            # Visual builder
+            visual_frame = ttk.Frame(self.formula_content_frame)
+            visual_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(visual_frame, text="Build your formula step by step:").pack(anchor=tk.W, pady=(0, 5))
+            
+            # Formula parts container with scrolling
+            self.formula_parts = []
+            
+            # Create scrollable frame for formula parts
+            parts_canvas_frame = ttk.Frame(visual_frame)
+            parts_canvas_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+            parts_canvas_frame.grid_rowconfigure(0, weight=1)
+            parts_canvas_frame.grid_columnconfigure(0, weight=1)
+            
+            parts_canvas = tk.Canvas(parts_canvas_frame, height=200, highlightthickness=0)
+            parts_scrollbar = ttk.Scrollbar(parts_canvas_frame, orient="vertical", command=parts_canvas.yview)
+            self.formula_parts_frame = ttk.Frame(parts_canvas)
+            
+            self.formula_parts_frame.bind(
+                "<Configure>",
+                lambda e: parts_canvas.configure(scrollregion=parts_canvas.bbox("all"))
+            )
+            
+            parts_canvas.create_window((0, 0), window=self.formula_parts_frame, anchor="nw")
+            parts_canvas.configure(yscrollcommand=parts_scrollbar.set)
+            
+            parts_canvas.grid(row=0, column=0, sticky="nsew")
+            parts_scrollbar.grid(row=0, column=1, sticky="ns")
+            
+            # Bind mousewheel for formula parts
+            parts_canvas.bind("<MouseWheel>", lambda e: parts_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+            self.formula_parts_frame.bind("<MouseWheel>", lambda e: parts_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+            
+            # Add first part
+            self.add_formula_part()
+            
+            # Add part button
+            ttk.Button(visual_frame, text="Add More", 
+                      command=self.add_formula_part).pack(anchor=tk.W, pady=(5, 0))
+            
+            # Parse existing formula if it exists
+            if self.current_formula:
+                self.parse_existing_formula()
+                
+        except Exception as e:
+            print(f"DEBUG: Error creating visual formula builder: {e}")
+            # Fallback to manual entry
+            self.formula_type.set("manual")
+            self.create_manual_formula_entry()
             
     def add_formula_part(self, initial_column="", initial_operator="+", initial_value=""):
         """Add a new part to the visual formula builder."""
@@ -1430,10 +1457,75 @@ class ExpressionBuilderDialog:
         
     def parse_existing_formula(self):
         """Parse existing formula into visual parts."""
-        # This is a simple parser - could be enhanced
-        # For now, just put the formula in manual mode
-        self.formula_type.set("manual")
-        self.update_formula_interface()
+        # Try to parse the formula into visual parts
+        if self.current_formula and self.formula_type.get() == "visual":
+            # More sophisticated parsing that handles quoted strings and doesn't split on hyphens in column names
+            import re
+            
+            # First, extract all quoted strings to protect them
+            quoted_matches = []
+            formula = self.current_formula
+            
+            # Find all quoted strings and replace them with placeholders
+            def replace_quoted(match):
+                placeholder = f"__QUOTED_{len(quoted_matches)}__"
+                quoted_matches.append(match.group(0))
+                return placeholder
+            
+            # Replace quoted strings with placeholders
+            formula_protected = re.sub(r'"[^"]*"', replace_quoted, formula)
+            
+            # Now split by operators (but not hyphens that might be in column names)
+            parts = re.split(r'([+\*/])', formula_protected)
+            
+            # Restore quoted strings
+            for i, part in enumerate(parts):
+                for j, quoted in enumerate(quoted_matches):
+                    if f"__QUOTED_{j}__" in part:
+                        parts[i] = part.replace(f"__QUOTED_{j}__", quoted)
+            
+            # Clear existing parts
+            for part in self.formula_parts[:]:
+                self.remove_formula_part(part['frame'], part)
+            
+            # Add parts based on parsed formula
+            for i, part in enumerate(parts):
+                part = part.strip()
+                if not part:
+                    continue
+                    
+                if part in ['+', '*', '/']:
+                    # This is an operator, will be handled by next part
+                    continue
+                    
+                # Check if it's a column name (with or without quotes)
+                is_column = False
+                col_name = ""
+                
+                if part.startswith('"') and part.endswith('"'):
+                    # Quoted column name
+                    col_name = part[1:-1]
+                    if col_name in self.get_current_columns():
+                        is_column = True
+                else:
+                    # Unquoted column name - check if it matches any available columns
+                    col_name = part
+                    if col_name in self.get_current_columns():
+                        is_column = True
+                
+                if is_column:
+                    self.add_formula_part(initial_column=col_name)
+                else:
+                    # Try to parse as number
+                    try:
+                        float(part)
+                        self.add_formula_part(initial_value=part)
+                    except ValueError:
+                        # Not a number, treat as column anyway (might be a column name with spaces or special chars)
+                        self.add_formula_part(initial_column=part)
+        else:
+            # If not visual mode or no formula, just update the interface
+            self.update_formula_interface()
         
     def create_manual_formula_entry(self):
         """Create manual formula entry interface."""

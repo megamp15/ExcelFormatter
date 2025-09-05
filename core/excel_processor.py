@@ -124,6 +124,9 @@ class ExcelProcessor:
         try:
             self.logger.info("Applying column mapping configuration")
             
+            # Apply void filtering to input data first if enabled
+            filtered_input_df = self._apply_void_filtering(input_df, config)
+            
             output_data = {}
             output_columns = config.get("output_columns", [])
             
@@ -138,21 +141,18 @@ class ExcelProcessor:
                 if source_column.startswith("="):
                     # Formula mapping
                     output_data[col_name] = self._evaluate_formula(
-                        source_column, input_df, output_data, col_config
+                        source_column, filtered_input_df, output_data, col_config
                     )
                 elif source_column == "":
                     # Blank column
-                    output_data[col_name] = [""] * len(input_df)
+                    output_data[col_name] = [""] * len(filtered_input_df)
                 else:
                     # Direct column mapping
                     output_data[col_name] = self._map_column(
-                        source_column, input_df
+                        source_column, filtered_input_df, col_config
                     )
                     
             result_df = pd.DataFrame(output_data)
-            
-            # Apply void filtering if enabled
-            result_df = self._apply_void_filtering(result_df, config)
             
             self.logger.info(f"Mapping applied successfully. Output shape: {result_df.shape}")
             return result_df
@@ -337,19 +337,30 @@ class ExcelProcessor:
         )
         
             
-    def _map_column(self, source_column: str, input_df: pd.DataFrame) -> List[Any]:
+    def _map_column(self, source_column: str, input_df: pd.DataFrame, col_config: Dict[str, Any] = None) -> List[Any]:
         """
         Map single column directly.
         
         Args:
             source_column: Source column name
             input_df: Input DataFrame
+            col_config: Column configuration for transformations
             
         Returns:
             List of mapped values
         """
         if source_column in input_df.columns:
-            return input_df[source_column].tolist()
+            values = input_df[source_column].tolist()
+            
+            # Apply transformations if column config is provided
+            if col_config:
+                formatting = col_config.get("formatting", {})
+                
+                # Remove asterisks if enabled
+                if formatting.get("remove_asterisks", False):
+                    values = [str(value).replace("*", "") if pd.notna(value) else value for value in values]
+            
+            return values
         else:
             self.logger.warning(f"Column '{source_column}' not found in input data")
             return [""] * len(input_df)
@@ -359,7 +370,7 @@ class ExcelProcessor:
         Apply void filtering to remove rows where specified columns are all zero.
         
         Args:
-            df: DataFrame to filter
+            df: DataFrame to filter (input DataFrame)
             config: Configuration containing void settings
             
         Returns:
@@ -375,28 +386,39 @@ class ExcelProcessor:
             if not zero_columns:
                 return df
                 
-            # Check which columns exist
+            # Check which columns exist in the input DataFrame
             existing_columns = [col for col in zero_columns if col in df.columns]
             if not existing_columns:
-                self.logger.warning(f"No void filter columns found in output: {zero_columns}")
+                self.logger.warning(f"No void filter columns found in input data: {zero_columns}")
+                self.logger.info(f"Available input columns: {list(df.columns)}")
                 return df
                 
-            self.logger.info(f"Applying void filtering on columns: {existing_columns}")
+            self.logger.info(f"Applying void filtering on input columns: {existing_columns}")
+            
+            # Debug: Show sample values from the columns being checked
+            for col in existing_columns:
+                sample_values = df[col].head(10).tolist()
+                self.logger.info(f"Sample values from '{col}': {sample_values}")
             
             # Create mask for rows where all specified columns are zero
             mask = pd.Series([True] * len(df))
             
             for col in existing_columns:
                 numeric_col = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                mask = mask & (numeric_col == 0)
+                col_mask = (numeric_col == 0)
+                self.logger.info(f"Column '{col}': {col_mask.sum()} zero values out of {len(df)} rows")
+                mask = mask & col_mask
                 
             # Count and remove void rows
             void_rows = mask.sum()
             if void_rows > 0:
-                self.logger.info(f"Removing {void_rows} void rows")
+                self.logger.info(f"Removing {void_rows} void rows from input data")
+                # Debug: Show which rows are being removed
+                void_row_indices = df[mask].index.tolist()[:10]  # Show first 10
+                self.logger.info(f"Sample void row indices: {void_row_indices}")
                 return df[~mask].copy()
             else:
-                self.logger.info("No void rows found")
+                self.logger.info("No void rows found in input data")
                 return df
                 
         except Exception as e:

@@ -16,20 +16,27 @@ from config.settings import *
 class OutputSettings(ttk.Frame):
     """Component for configuring output formatting settings."""
     
-    def __init__(self, parent):
+    def __init__(self, parent, on_change_callback=None):
         """
         Initialize the output settings component.
         
         Args:
             parent: Parent tkinter widget
+            on_change_callback: Optional callback function to call when settings change
         """
         super().__init__(parent)
         
         # Initialize variables
         self.available_columns = []
         self.output_columns = []
+        self.on_change_callback = on_change_callback
         self.init_variables()
         self.create_widgets()
+        
+    def _notify_change(self):
+        """Notify parent that settings have changed."""
+        if self.on_change_callback:
+            self.on_change_callback()
         
     def init_variables(self):
         """Initialize tkinter variables for settings."""
@@ -47,6 +54,24 @@ class OutputSettings(ttk.Frame):
         # Void filtering
         self.void_enabled = tk.BooleanVar(value=False)
         self.selected_void_columns = []
+        
+        # Set up change notifications for all variables
+        self._setup_change_notifications()
+        
+    def _setup_change_notifications(self):
+        """Set up change notifications for all tkinter variables."""
+        # Header formatting variables
+        self.header_bold.trace('w', lambda *args: self._notify_change())
+        self.header_bg_color.trace('w', lambda *args: self._notify_change())
+        self.header_font_color.trace('w', lambda *args: self._notify_change())
+        self.header_alignment.trace('w', lambda *args: self._notify_change())
+        
+        # General settings variables
+        self.auto_fit_columns.trace('w', lambda *args: self._notify_change())
+        self.freeze_header_row.trace('w', lambda *args: self._notify_change())
+        
+        # Void filtering variables
+        self.void_enabled.trace('w', lambda *args: self._notify_change())
         
     def create_widgets(self):
         """Create and arrange the settings widgets."""
@@ -256,6 +281,17 @@ class OutputSettings(ttk.Frame):
         # Initialize empty checkboxes container
         self.void_checkboxes = {}
         
+        # Save button for void filter settings
+        save_button_frame = ttk.Frame(void_frame)
+        save_button_frame.grid(row=4, column=0, sticky="w", padx=10, pady=10)
+        
+        ttk.Button(
+            save_button_frame,
+            text="Save Void Filter Settings",
+            command=self._save_void_settings,
+            style="Accent.TButton"
+        ).pack(side=tk.LEFT)
+        
     def choose_color(self, color_var: tk.StringVar):
         """Open color chooser dialog."""
         current_color = color_var.get()
@@ -324,17 +360,47 @@ class OutputSettings(ttk.Frame):
             checkbox.grid(row=i, column=0, sticky="w", padx=5, pady=2)
             self.void_checkboxes[column] = var
             
+            # Restore selected state if this column was previously selected
+            if column in self.selected_void_columns:
+                var.set(True)
+                
+        # Apply pending void columns if they exist (from config loading)
+        if hasattr(self, '_pending_void_columns') and self._pending_void_columns:
+            for column, var in self.void_checkboxes.items():
+                var.set(column in self._pending_void_columns)
+            # Clear pending columns
+            delattr(self, '_pending_void_columns')
+            
     def _on_freeze_selection_changed(self):
         """Handle changes to freeze column selection."""
         self.selected_freeze_columns = [
             col for col, var in self.freeze_checkboxes.items() if var.get()
         ]
+        self._notify_change()
         
     def _on_void_selection_changed(self):
         """Handle changes to void column selection."""
         self.selected_void_columns = [
             col for col, var in self.void_checkboxes.items() if var.get()
         ]
+        self._notify_change()
+        
+    def _save_void_settings(self):
+        """Save void filter settings and show confirmation."""
+        # Update the selected columns
+        self._on_void_selection_changed()
+        
+        # Show confirmation message
+        if self.void_enabled.get() and self.selected_void_columns:
+            message = f"Void filter enabled for columns: {', '.join(self.selected_void_columns)}"
+        elif self.void_enabled.get():
+            message = "Void filter enabled but no columns selected"
+        else:
+            message = "Void filter disabled"
+            
+        # Show confirmation (you might want to use a more subtle notification)
+        import tkinter.messagebox as msgbox
+        msgbox.showinfo("Void Filter Settings", f"Settings saved!\n\n{message}")
         
     def get_configuration(self) -> Dict[str, Any]:
         """Get current output settings configuration."""
@@ -402,9 +468,13 @@ class OutputSettings(ttk.Frame):
         void_columns = void_config.get("zero_columns", [])
         self.selected_void_columns = void_columns.copy()
         
-        # Update checkbox states
-        for column, var in self.void_checkboxes.items():
-            var.set(column in void_columns)
+        # Update checkbox states if checkboxes exist
+        if hasattr(self, 'void_checkboxes') and self.void_checkboxes:
+            for column, var in self.void_checkboxes.items():
+                var.set(column in void_columns)
+        else:
+            # Store the void columns to be applied when checkboxes are created
+            self._pending_void_columns = void_columns.copy()
             
         # Update freeze panes checkbox states
         for column, var in self.freeze_checkboxes.items():

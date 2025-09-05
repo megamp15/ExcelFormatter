@@ -9,6 +9,7 @@ different components and provides the primary user interface.
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
+import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -33,6 +34,7 @@ class MainWindow(ttk.Frame):
         super().__init__(parent)
         self.parent = parent
         self.controller = controller
+        self.logger = logging.getLogger(__name__)
         
         # Initialize variables
         self.input_file_path = tk.StringVar()
@@ -41,6 +43,14 @@ class MainWindow(ttk.Frame):
         self.current_tab = 0  # Track current tab (0=File Selection, 1=Column Mapping, 2=Output Settings)
         self.mapping_has_changes = False  # Track if mappings have been changed from defaults
         self.is_initializing = True  # Track if we're in initialization phase
+        
+        # Track button enabled states to persist across tab navigation
+        self.buttons_enabled = {
+            'load_config': False,
+            'save_config': False,
+            'preview': False,
+            'process': False
+        }
         
         # Set up the GUI
         self.setup_window()
@@ -171,7 +181,7 @@ class MainWindow(ttk.Frame):
         self.output_frame.grid_columnconfigure(0, weight=1)
         
         # Output settings component
-        self.output_settings = OutputSettings(self.output_frame)
+        self.output_settings = OutputSettings(self.output_frame, self.on_output_settings_changed)
         self.output_settings.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         
     def create_action_buttons(self):
@@ -256,6 +266,8 @@ class MainWindow(ttk.Frame):
                     self.output_settings.set_available_columns([])
                 # Reset mapping changes flag when clearing input
                 self.mapping_has_changes = False
+                # Reset all button states when clearing input
+                self.reset_button_states()
                 self.update_button_states()
                 return
                 
@@ -315,6 +327,14 @@ class MainWindow(ttk.Frame):
         
         self.update_button_states()
         
+    def on_output_settings_changed(self):
+        """Handle output settings changes."""
+        # Mark that configuration has been changed (but not during initialization)
+        if not self.is_initializing:
+            self.mapping_has_changes = True
+        
+        self.update_button_states()
+        
     def update_preview(self, preview_data: str):
         """Update the file preview display."""
         self.preview_text.config(state=tk.NORMAL)
@@ -348,21 +368,46 @@ class MainWindow(ttk.Frame):
             # If tabs aren't ready yet, just continue
             pass
         
-        # Load config button - only enabled if we have input file and are on mapping tab
+        # Update button enabled states based on requirements
+        # Once a button is enabled, it stays enabled (unless explicitly disabled)
+        
+        # Load config button - enable if we have input file and are on mapping tab
+        if has_input_file and is_on_mapping_tab:
+            self.buttons_enabled['load_config'] = True
+        
+        # Save config button - enable if we have input file, are on mapping tab, and have changes
+        if has_input_file and is_on_mapping_tab and self.mapping_has_changes:
+            self.buttons_enabled['save_config'] = True
+        
+        # Preview button - enable if we have input file and mapping and are on mapping tab
+        if has_input_file and has_mapping and is_on_mapping_tab:
+            self.buttons_enabled['preview'] = True
+        
+        # Process button - enable if we have input file and mapping and are on mapping tab
+        if has_input_file and has_mapping and is_on_mapping_tab:
+            self.buttons_enabled['process'] = True
+        
+        # Apply button states
         if hasattr(self, 'load_config_btn'):
-            self.load_config_btn.config(state=tk.NORMAL if has_input_file and is_on_mapping_tab else tk.DISABLED)
+            self.load_config_btn.config(state=tk.NORMAL if self.buttons_enabled['load_config'] else tk.DISABLED)
         
-        # Save config button - only enabled if we have input file, are on mapping tab, and have changes
         if hasattr(self, 'save_config_btn'):
-            self.save_config_btn.config(state=tk.NORMAL if has_input_file and is_on_mapping_tab and self.mapping_has_changes else tk.DISABLED)
+            self.save_config_btn.config(state=tk.NORMAL if self.buttons_enabled['save_config'] else tk.DISABLED)
         
-        # Preview button - enabled if we have input file and mapping and are on mapping tab
         if hasattr(self, 'preview_btn'):
-            self.preview_btn.config(state=tk.NORMAL if has_input_file and has_mapping and is_on_mapping_tab else tk.DISABLED)
+            self.preview_btn.config(state=tk.NORMAL if self.buttons_enabled['preview'] else tk.DISABLED)
         
-        # Process button - enabled if we have input file and mapping and are on mapping tab
         if hasattr(self, 'process_btn'):
-            self.process_btn.config(state=tk.NORMAL if has_input_file and has_mapping and is_on_mapping_tab else tk.DISABLED)
+            self.process_btn.config(state=tk.NORMAL if self.buttons_enabled['process'] else tk.DISABLED)
+    
+    def reset_button_states(self):
+        """Reset all button enabled states."""
+        self.buttons_enabled = {
+            'load_config': False,
+            'save_config': False,
+            'preview': False,
+            'process': False
+        }
         
     def load_configuration(self):
         """Load mapping configuration from file."""
@@ -385,9 +430,19 @@ class MainWindow(ttk.Frame):
                     # Update output columns for freeze panes
                     output_columns = [col.get("name", "") for col in config.get("output_columns", []) if col.get("name", "")]
                     self.output_settings.set_output_columns(output_columns)
+                    
+                    # Set available columns for void filtering if we have an input file
+                    if self.input_file_path.get():
+                        try:
+                            available_columns = self.controller.get_file_columns(self.input_file_path.get())
+                            self.output_settings.set_available_columns(available_columns)
+                        except Exception as e:
+                            self.logger.warning(f"Could not load columns for void filtering: {e}")
                 
                 # Reset mapping changes flag since we loaded a config
                 self.mapping_has_changes = False
+                # Reset save button state since we just loaded a config
+                self.buttons_enabled['save_config'] = False
                 self.update_button_states()
                 
         except Exception as e:
@@ -410,6 +465,8 @@ class MainWindow(ttk.Frame):
                 messagebox.showinfo("Success", SUCCESS_MESSAGES["config_saved"])
                 # Reset mapping changes flag since we saved the config
                 self.mapping_has_changes = False
+                # Reset save button state since we just saved
+                self.buttons_enabled['save_config'] = False
                 self.update_button_states()
                 
         except Exception as e:
@@ -438,7 +495,7 @@ class MainWindow(ttk.Frame):
             input_file = self.input_file_path.get()
             config = self.get_current_configuration()
             
-            preview_data = self.controller.preview_output(input_file, config)
+            preview_data = self.controller.preview_output(input_file, config, max_rows=None)
             
             # Show preview dialog
             self.show_preview_dialog(preview_data)
@@ -450,7 +507,7 @@ class MainWindow(ttk.Frame):
         """Show preview data in a dialog window."""
         preview_window = tk.Toplevel(self.parent)
         preview_window.title("Output Preview")
-        preview_window.geometry("800x600")
+        preview_window.geometry("1200x800")
         
         # Create text widget with scrollbars
         frame = ttk.Frame(preview_window)

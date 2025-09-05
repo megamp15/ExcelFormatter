@@ -165,7 +165,7 @@ class MainController:
             self.logger.error(f"Error getting file columns: {str(e)}")
             raise
             
-    def preview_output(self, input_file: str, config: Dict[str, Any], max_rows: int = 50) -> str:
+    def preview_output(self, input_file: str, config: Dict[str, Any], max_rows: int = None) -> str:
         """
         Generate a preview of the processed output.
         
@@ -196,29 +196,37 @@ class MainController:
             self.logger.error(f"Error generating output preview: {str(e)}")
             raise
             
-    def _get_file_output_preview(self, file_path: Path, config: Dict[str, Any], max_rows: int) -> str:
+    def _get_file_output_preview(self, file_path: Path, config: Dict[str, Any], max_rows: int = None) -> str:
         """Get output preview for a single Excel file."""
         # Process file with configuration
         input_df = self.excel_processor.read_excel_file(file_path)
         output_df = self.excel_processor.apply_mapping(input_df, config)
         
-        # Generate preview
-        preview_df = output_df.head(max_rows)
-        
-        preview_text = f"Output Preview for: {file_path.name}\n"
-        preview_text += f"Output Shape: {output_df.shape[0]} rows × {output_df.shape[1]} columns\n"
-        preview_text += f"Output Columns: {', '.join(output_df.columns.tolist())}\n\n"
-        preview_text += f"Preview (first {min(max_rows, len(output_df))} rows):\n"
-        preview_text += "=" * 80 + "\n"
-        preview_text += preview_df.to_string(max_rows=max_rows)
-        
-        if len(output_df) > max_rows:
-            preview_text += f"\n\n... and {len(output_df) - max_rows} more rows"
+        # Generate preview - show all rows if max_rows is None
+        if max_rows is None:
+            preview_df = output_df
+            preview_text = f"Output Preview for: {file_path.name}\n"
+            preview_text += f"Output Shape: {output_df.shape[0]} rows × {output_df.shape[1]} columns\n"
+            preview_text += f"Output Columns: {', '.join(output_df.columns.tolist())}\n\n"
+            preview_text += f"Complete Output ({len(output_df)} rows):\n"
+            preview_text += "=" * 80 + "\n"
+            preview_text += preview_df.to_string()
+        else:
+            preview_df = output_df.head(max_rows)
+            preview_text = f"Output Preview for: {file_path.name}\n"
+            preview_text += f"Output Shape: {output_df.shape[0]} rows × {output_df.shape[1]} columns\n"
+            preview_text += f"Output Columns: {', '.join(output_df.columns.tolist())}\n\n"
+            preview_text += f"Preview (first {min(max_rows, len(output_df))} rows):\n"
+            preview_text += "=" * 80 + "\n"
+            preview_text += preview_df.to_string(max_rows=max_rows)
+            
+            if len(output_df) > max_rows:
+                preview_text += f"\n\n... and {len(output_df) - max_rows} more rows"
             
         self.logger.info("Output preview generated successfully")
         return preview_text
         
-    def _get_folder_output_preview(self, folder_path: Path, config: Dict[str, Any], max_rows: int) -> str:
+    def _get_folder_output_preview(self, folder_path: Path, config: Dict[str, Any], max_rows: int = None) -> str:
         """Get output preview for a folder containing Excel files."""
         # Find Excel files in the folder
         excel_files = []
@@ -231,9 +239,9 @@ class MainController:
         # Sort files by name
         excel_files.sort(key=lambda f: f.name)
         
-        # Get preview from first file
+        # Get preview from first file - show all rows if max_rows is None
         try:
-            first_file_preview = self._get_file_output_preview(excel_files[0], config, 30)  # Smaller preview for folders
+            first_file_preview = self._get_file_output_preview(excel_files[0], config, max_rows)
         except Exception as e:
             first_file_preview = f"Error reading first file: {str(e)}"
         
@@ -251,9 +259,19 @@ class MainController:
             preview_text += f"    ... and {len(excel_files) - 10} more files\n"
         
         preview_text += "\n" + "=" * 80 + "\n"
-        preview_text += f"Sample output preview from first file ({excel_files[0].name}):\n"
+        if max_rows is None:
+            preview_text += f"Complete output preview from first file ({excel_files[0].name}):\n"
+        else:
+            preview_text += f"Sample output preview from first file ({excel_files[0].name}):\n"
         preview_text += "=" * 80 + "\n"
-        preview_text += first_file_preview.split("Preview (first")[1] if "Preview (first" in first_file_preview else first_file_preview
+        
+        # Extract the preview content (skip the header info)
+        if "Complete Output" in first_file_preview:
+            preview_text += first_file_preview.split("Complete Output")[1]
+        elif "Preview (first" in first_file_preview:
+            preview_text += first_file_preview.split("Preview (first")[1]
+        else:
+            preview_text += first_file_preview
         
         return preview_text
             
