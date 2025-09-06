@@ -322,6 +322,7 @@ class OutputSettings(ttk.Frame):
         self.output_columns = output_columns if output_columns else []
         self._update_freeze_columns()
         
+        
     def _update_freeze_columns(self):
         """Update freeze panes column checkboxes."""
         # Clear existing checkboxes

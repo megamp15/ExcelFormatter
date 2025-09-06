@@ -330,6 +330,31 @@ class ColumnMapper(ttk.Frame):
         action_frame = ttk.Frame(self.scrollable_frame)
         action_frame.grid(row=row_num, column=7, padx=5, pady=2)
         
+        # Order controls frame
+        order_frame = ttk.Frame(action_frame)
+        order_frame.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Move up button
+        up_btn = ttk.Button(
+            order_frame,
+            text="↑",
+            command=lambda idx=row_index: self.move_row_up(idx),
+            width=2
+        )
+        up_btn.pack(side=tk.LEFT, padx=(0, 1))
+        row_data['widgets']['up_btn'] = up_btn
+        
+        # Move down button
+        down_btn = ttk.Button(
+            order_frame,
+            text="↓",
+            command=lambda idx=row_index: self.move_row_down(idx),
+            width=2
+        )
+        down_btn.pack(side=tk.LEFT, padx=(0, 2))
+        row_data['widgets']['down_btn'] = down_btn
+        
+        
         # Advanced settings button
         advanced_btn = ttk.Button(
             action_frame,
@@ -361,6 +386,61 @@ class ColumnMapper(ttk.Frame):
         # Trigger callback
         self._on_mapping_changed(row_index)
         
+    def move_row_up(self, index: int):
+        """Move a row up in the order."""
+        if index == 0:
+            return  # Already at top
+            
+        # Swap rows
+        self.mapping_rows[index], self.mapping_rows[index - 1] = self.mapping_rows[index - 1], self.mapping_rows[index]
+        
+        # Update row numbers and positions
+        self._refresh_row_positions()
+        self._update_order_numbers()
+        self._on_mapping_changed(index - 1)  # Notify of change
+        
+    def move_row_down(self, index: int):
+        """Move a row down in the order."""
+        if index == len(self.mapping_rows) - 1:
+            return  # Already at bottom
+            
+        # Swap rows
+        self.mapping_rows[index], self.mapping_rows[index + 1] = self.mapping_rows[index + 1], self.mapping_rows[index]
+        
+        # Update row numbers and positions
+        self._refresh_row_positions()
+        self._update_order_numbers()
+        self._on_mapping_changed(index + 1)  # Notify of change
+        
+            
+    def _refresh_row_positions(self):
+        """Refresh the grid positions of all rows."""
+        for i, row_data in enumerate(self.mapping_rows):
+            row_num = i + 2  # +2 because of header and separator
+            row_data['index'] = i
+            
+            # Update button callbacks to use current index
+            if 'up_btn' in row_data['widgets']:
+                row_data['widgets']['up_btn'].config(command=lambda idx=i: self.move_row_up(idx))
+            if 'down_btn' in row_data['widgets']:
+                row_data['widgets']['down_btn'].config(command=lambda idx=i: self.move_row_down(idx))
+            
+            # Update all widgets in this row
+            for widget_name, widget in row_data['widgets'].items():
+                if hasattr(widget, 'grid_info'):
+                    grid_info = widget.grid_info()
+                    if grid_info:  # If widget is gridded
+                        widget.grid(row=row_num, column=grid_info['column'], 
+                                  sticky=grid_info.get('sticky', ''), 
+                                  padx=grid_info.get('padx', 0), 
+                                  pady=grid_info.get('pady', 0))
+                                  
+    def _update_order_numbers(self):
+        """Update the order numbers for all rows."""
+        for i, row_data in enumerate(self.mapping_rows):
+            # Update the # column (row_label) to show current visual position
+            row_data['widgets']['row_label'].config(text=str(i + 1))
+            
     def remove_mapping_row(self, index: int):
         """Remove a specific mapping row."""
         if 0 <= index < len(self.mapping_rows):
@@ -374,7 +454,8 @@ class ColumnMapper(ttk.Frame):
             del self.mapping_rows[index]
             
             # Update indices and row numbers
-            self.refresh_row_display()
+            self._refresh_row_positions()
+            self._update_order_numbers()
             self.update_button_states()
             self.update_canvas_scroll()
             
@@ -410,6 +491,12 @@ class ColumnMapper(ttk.Frame):
             
             # Update row number
             row_data['widgets']['row_label'].config(text=str(i + 1))
+            
+            # Update button callbacks to use current index
+            if 'up_btn' in row_data['widgets']:
+                row_data['widgets']['up_btn'].config(command=lambda idx=i: self.move_row_up(idx))
+            if 'down_btn' in row_data['widgets']:
+                row_data['widgets']['down_btn'].config(command=lambda idx=i: self.move_row_down(idx))
             
             # Update grid positions
             row_num = i + 2  # +2 for header and separator
@@ -656,6 +743,8 @@ TIPS:
             
             row_data['advanced_settings'] = formatting
             
+        # Update order numbers
+        self._update_order_numbers()
         self.update_button_states()
         self.update_canvas_scroll()
 

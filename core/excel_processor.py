@@ -154,6 +154,17 @@ class ExcelProcessor:
                     
             result_df = pd.DataFrame(output_data)
             
+            # Apply column ordering if specified
+            column_order = config.get("column_order", [])
+            if column_order:
+                # Filter to only include columns that exist in the result
+                valid_order = [col for col in column_order if col in result_df.columns]
+                # Add any remaining columns that weren't in the order
+                remaining_cols = [col for col in result_df.columns if col not in valid_order]
+                final_order = valid_order + remaining_cols
+                result_df = result_df[final_order]
+                self.logger.info(f"Applied column ordering: {final_order}")
+            
             self.logger.info(f"Mapping applied successfully. Output shape: {result_df.shape}")
             return result_df
             
